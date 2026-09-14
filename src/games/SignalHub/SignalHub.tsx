@@ -16,7 +16,12 @@ import {
   pathsToGrid,
   SIGNAL_COLORS,
 } from './pathLogic';
-import { getNextHintColor, HARD_HINTS } from './signalHints';
+import {
+  COLOR_LABELS,
+  findHintPath,
+  getNextHintColor,
+  HARD_HINT_LABELS,
+} from './signalHints';
 import { SIGNAL_LEVELS } from './signalLevels';
 import type { SignalColor } from './types';
 
@@ -35,7 +40,9 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
     path: [number, number][];
   } | null>(null);
   const [restarts, setRestarts] = useState(0);
-  const [hintText, setHintText] = useState<string | null>(null);
+  const [hintColor, setHintColor] = useState<SignalColor | null>(null);
+  const [hintPath, setHintPath] = useState<[number, number][] | null>(null);
+  const [hintLabel, setHintLabel] = useState<string | null>(null);
   const [pathError, setPathError] = useState('');
   const startTime = useRef(Date.now());
   const [elapsed, setElapsed] = useState(0);
@@ -52,7 +59,9 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
   const handleRestart = useCallback(() => {
     setPaths(new Map());
     setDrawing(null);
-    setHintText(null);
+    setHintColor(null);
+    setHintPath(null);
+    setHintLabel(null);
     setPathError('');
     setRestarts((r) => r + 1);
     startTime.current = Date.now();
@@ -136,6 +145,11 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
       newPaths.set(drawing.color, drawing.path);
       setPaths(newPaths);
       setPathError('');
+      if (hintColor === drawing.color) {
+        setHintColor(null);
+        setHintPath(null);
+        setHintLabel(null);
+      }
     } else if (drawing.path.length >= 2) {
       setPathError('El camino debe llegar al otro nodo del mismo color');
     }
@@ -148,12 +162,24 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
       if (isColorConnected(level, paths, color)) connected.add(color);
     }
     const next = getNextHintColor(connected);
-    if (next && HARD_HINTS[next]) {
-      setHintText(HARD_HINTS[next]!);
-    } else {
-      setHintText('¡Ya conectaste todos los pares!');
+    if (!next) {
+      setHintColor(null);
+      setHintPath(null);
+      setHintLabel('¡Ya conectaste todos los pares!');
+      return;
     }
+
+    const path = findHintPath(level, paths, next);
+    setHintColor(next);
+    setHintPath(path);
+    setHintLabel(
+      path
+        ? `${COLOR_LABELS[next]}: ${HARD_HINT_LABELS[next] ?? 'Sigue la ruta resaltada en el tablero.'}`
+        : `${COLOR_LABELS[next]}: un camino anterior bloquea la solución — borra el último color conectado y sigue las pistas en orden (Rojo → Azul → Amarillo → Morado → Verde).`,
+    );
   };
+
+  const hintPathSet = new Set(hintPath?.map(([r, c]) => `${r},${c}`) ?? []);
 
   const displayPaths = new Map(paths);
   if (drawing) displayPaths.set(drawing.color, drawing.path);
@@ -194,8 +220,8 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
         </button>
       )}
 
-      {hintText && (
-        <p className="game-hint game-hint--action">{hintText}</p>
+      {hintLabel && (
+        <p className="game-hint game-hint--action signal-hint-label">{hintLabel}</p>
       )}
 
       {pathError && (
@@ -224,6 +250,11 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
             }
 
             const isPath = cell.type === 'path';
+            const isHintCell = hintColor !== null && hintPathSet.has(`${r},${c}`);
+            const isHintEndpoint =
+              hintColor !== null &&
+              cell.type === 'endpoint' &&
+              cell.color === hintColor;
             const pair = drawing ? getEndpointPairs(level).get(drawing.color) : null;
             const isTargetEndpoint =
               pair &&
@@ -231,11 +262,18 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
               ((r === pair[1].row && c === pair[1].col) ||
                 (r === pair[0].row && c === pair[0].col));
 
+            const hintStyle =
+              isHintCell && hintColor
+                ? ({
+                    '--hint-color': SIGNAL_COLORS[hintColor],
+                  } as React.CSSProperties)
+                : undefined;
+
             return (
               <div
                 key={`${r}-${c}`}
-                className={`signal-cell ${isPath ? 'signal-cell--path' : ''} ${isTargetEndpoint ? 'signal-cell--target-ep' : ''}`}
-                style={{ background: bg }}
+                className={`signal-cell ${isPath ? 'signal-cell--path' : ''} ${isTargetEndpoint ? 'signal-cell--target-ep' : ''} ${isHintCell ? 'signal-cell--hint' : ''} ${isHintEndpoint ? 'signal-cell--hint-endpoint' : ''}`}
+                style={{ background: bg, ...hintStyle }}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   startDraw(r, c);
