@@ -22,30 +22,27 @@ const COLOR_MAP: Record<ColorId, string> = {
   purple: '#a78bfa',
 };
 
-const MAX_BONUS_MOVES = 4;
-
 interface Props {
   difficulty: Difficulty;
+  bonusMoves?: number;
   onFinish: (won: boolean, result: GameResultData) => void;
   onMenu: () => void;
 }
 
-export function OverflowingPalette({ difficulty, onFinish, onMenu }: Props) {
+export function OverflowingPalette({ difficulty, bonusMoves = 0, onFinish, onMenu }: Props) {
   const level = PALETTE_LEVELS[difficulty];
   const [showTutorial, setShowTutorial] = useState(true);
   const [state, setState] = useState<PaletteState>(() => initPaletteState(level));
-  const [sessionFailures, setSessionFailures] = useState(0);
   const [restarts, setRestarts] = useState(0);
   const [lastColor, setLastColor] = useState<ColorId | null>(null);
   const startTime = useRef(Date.now());
   const [elapsed, setElapsed] = useState(0);
   const finished = useRef(false);
 
-  const bonusMoves = useMemo(
-    () => Math.min(MAX_BONUS_MOVES, sessionFailures),
-    [sessionFailures],
+  const maxMoves = useMemo(
+    () => level.maxMoves + bonusMoves,
+    [level.maxMoves, bonusMoves],
   );
-  const maxMoves = level.maxMoves + bonusMoves;
 
   useEffect(() => {
     if (showTutorial || finished.current) return;
@@ -78,7 +75,6 @@ export function OverflowingPalette({ difficulty, onFinish, onMenu }: Props) {
         won,
       });
       saveResult('palette', difficulty, score, won);
-      if (!won) setSessionFailures((f) => f + 1);
       onFinish(won, {
         score,
         timeMs,
@@ -122,7 +118,7 @@ export function OverflowingPalette({ difficulty, onFinish, onMenu }: Props) {
             'Elige un color de la paleta para expandir tu región.',
             'El color se propaga a todos los bloques conectados de tu región.',
             `Convierte todo el tablero a ${level.targetColor} en ${maxMoves} movimientos o menos.`,
-            'Si fallas varias veces en esta sesión, recibirás movimientos extra (se reinician al refrescar).',
+            'Si fallas varias veces en esta sesión, podrás elegir movimientos extra al reintentar (se reinician al refrescar).',
           ]}
           onStart={() => {
             setShowTutorial(false);

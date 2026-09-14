@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { getCodeColor } from '../games/BreachProtocol/breachLogic';
 import type { SequenceStatus } from '../games/BreachProtocol/types';
 
@@ -7,11 +8,26 @@ interface Props {
   seqIndex: number;
 }
 
-/** Ancho aproximado de nodo + conector para el desplazamiento del track. */
-const STEP_PX = 76;
+function useMobileLayout() {
+  const [mobile, setMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 480px)').matches,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 480px)');
+    const update = (event: MediaQueryListEvent) => setMobile(event.matches);
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  return mobile;
+}
 
 export function BreachSequenceFlow({ codes, status, seqIndex }: Props) {
-  const slideOffset = status.progress * STEP_PX;
+  const mobile = useMobileLayout();
+  const stepPx = mobile ? 54 : 76;
+  const scannerPx = mobile ? 38 : 52;
+  const slideOffset = status.progress * stepPx;
 
   return (
     <div
@@ -31,7 +47,7 @@ export function BreachSequenceFlow({ codes, status, seqIndex }: Props) {
 
         <div
           className="breach-flow-track breach-flow-track--sliding"
-          style={{ transform: `translateX(calc(52px - ${slideOffset}px))` }}
+          style={{ transform: `translateX(calc(${scannerPx}px - ${slideOffset}px))` }}
         >
           {codes.map((code, i) => {
             const matched = i < status.progress;

@@ -39,7 +39,7 @@ export const PALETTE_LEVELS: Record<string, PaletteLevel> = {
     id: 'palette-hard',
     difficulty: 'hard',
     boardSize: 9,
-    maxMoves: 8,
+    maxMoves: 10,
     optimalMoves: 6,
     targetColor: 'yellow',
     colors: ['red', 'blue', 'green', 'yellow', 'purple'],

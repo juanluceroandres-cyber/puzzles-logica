@@ -11,6 +11,8 @@ import type { Difficulty, GameId, GameResultData } from './types/common';
 
 type Screen = 'menu' | 'difficulty' | 'playing' | 'result';
 
+const MAX_PALETTE_BONUS_MOVES = 4;
+
 function App() {
   const [screen, setScreen] = useState<Screen>('menu');
   const [gameId, setGameId] = useState<GameId | null>(null);
@@ -18,6 +20,9 @@ function App() {
   const [lastResult, setLastResult] = useState<{ won: boolean; data: GameResultData } | null>(
     null,
   );
+  const [paletteSessionFailures, setPaletteSessionFailures] = useState(0);
+  const [paletteBonusMoves, setPaletteBonusMoves] = useState(0);
+  const [playKey, setPlayKey] = useState(0);
 
   const handleSelectGame = (id: GameId) => {
     setGameId(id);
@@ -26,24 +31,40 @@ function App() {
 
   const handleSelectDifficulty = (d: Difficulty) => {
     setDifficulty(d);
+    setPaletteBonusMoves(0);
     setScreen('playing');
     setLastResult(null);
+    setPlayKey((k) => k + 1);
   };
 
   const handleFinish = (won: boolean, data: GameResultData) => {
+    if (gameId === 'palette') {
+      if (!won) {
+        setPaletteSessionFailures((f) => f + 1);
+      } else {
+        setPaletteSessionFailures(0);
+      }
+    }
     setLastResult({ won, data });
     setScreen('result');
   };
 
-  const handleRetry = () => {
+  const handleRetry = (useBonus = false) => {
+    if (gameId === 'palette') {
+      const available = Math.min(MAX_PALETTE_BONUS_MOVES, paletteSessionFailures);
+      setPaletteBonusMoves(useBonus ? available : 0);
+    }
     setScreen('playing');
     setLastResult(null);
+    setPlayKey((k) => k + 1);
   };
 
   const handleMenu = () => {
     setScreen('menu');
     setGameId(null);
     setLastResult(null);
+    setPaletteSessionFailures(0);
+    setPaletteBonusMoves(0);
   };
 
   const handleBackFromDifficulty = () => {
@@ -57,12 +78,12 @@ function App() {
       difficulty,
       onFinish: handleFinish,
       onMenu: handleMenu,
-      key: `${gameId}-${difficulty}-${screen}`,
+      key: `${gameId}-${difficulty}-${playKey}`,
     };
 
     switch (gameId) {
       case 'palette':
-        return <OverflowingPalette {...props} />;
+        return <OverflowingPalette {...props} bonusMoves={paletteBonusMoves} />;
       case 'signal':
         return <SignalHub {...props} />;
       case 'cube':
@@ -93,7 +114,17 @@ function App() {
           difficulty={difficulty}
           won={lastResult.won}
           result={lastResult.data}
-          onRetry={handleRetry}
+          onRetry={() => handleRetry(false)}
+          onRetryWithBonus={
+            gameId === 'palette' && !lastResult.won && paletteSessionFailures > 0
+              ? () => handleRetry(true)
+              : undefined
+          }
+          bonusMovesAvailable={
+            gameId === 'palette' && !lastResult.won
+              ? Math.min(MAX_PALETTE_BONUS_MOVES, paletteSessionFailures)
+              : undefined
+          }
           onMenu={handleMenu}
         />
       )}

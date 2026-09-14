@@ -8,6 +8,8 @@ interface GameResultProps {
   won: boolean;
   result: GameResultData;
   onRetry: () => void;
+  onRetryWithBonus?: () => void;
+  bonusMovesAvailable?: number;
   onMenu: () => void;
 }
 
@@ -17,6 +19,8 @@ export function GameResult({
   won,
   result,
   onRetry,
+  onRetryWithBonus,
+  bonusMovesAvailable,
   onMenu,
 }: GameResultProps) {
   const game = GAMES.find((g) => g.id === gameId)!;
@@ -67,10 +71,22 @@ export function GameResult({
             ))}
         </dl>
 
+        {!won && bonusMovesAvailable !== undefined && bonusMovesAvailable > 0 && (
+          <p className="result-bonus-hint">
+            Tienes +{bonusMovesAvailable} movimiento{bonusMovesAvailable > 1 ? 's' : ''} de ayuda
+            disponible{bonusMovesAvailable > 1 ? 's' : ''} por fallos en esta sesión.
+          </p>
+        )}
+
         <div className="result-actions">
           <button type="button" className="btn-primary" onClick={onRetry}>
             Reintentar
           </button>
+          {onRetryWithBonus && bonusMovesAvailable !== undefined && bonusMovesAvailable > 0 && (
+            <button type="button" className="btn-bonus" onClick={onRetryWithBonus}>
+              Reintentar con +{bonusMovesAvailable} mov.
+            </button>
+          )}
           <button type="button" className="btn-secondary" onClick={onMenu}>
             Menú principal
           </button>

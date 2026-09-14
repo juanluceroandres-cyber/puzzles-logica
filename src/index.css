@@ -227,6 +227,21 @@ body {
   color: var(--text);
 }
 
+.btn-bonus {
+  padding: 0.75rem 1.5rem;
+  background: #3ecf8e22;
+  color: var(--success);
+  border: 1px solid #3ecf8e66;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.btn-bonus:hover {
+  background: #3ecf8e33;
+  border-color: var(--success);
+}
+
 .btn-back {
   background: none;
   color: var(--text-muted);
@@ -388,6 +403,17 @@ body {
 
 .result-stats dd {
   font-weight: 600;
+}
+
+.result-bonus-hint {
+  margin: 1rem 0 0.5rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.85rem;
+  color: var(--success);
+  background: #3ecf8e12;
+  border: 1px solid #3ecf8e44;
+  border-radius: 8px;
+  text-align: center;
 }
 
 .result-actions {
@@ -752,6 +778,11 @@ body {
 /* Breach Protocol */
 .breach-screen {
   max-width: 520px;
+}
+
+.breach-layout {
+  display: flex;
+  flex-direction: column;
 }
 
 .breach-panel {
@@ -1555,6 +1586,136 @@ body {
   .game-card { padding: 0.85rem 1rem; }
   .palette-color-btn { width: 42px; height: 42px; }
   .result-stats { grid-template-columns: 1fr; }
+
+  /* Breach Protocol — compact mobile layout */
+  .breach-screen {
+    max-width: 100%;
+  }
+
+  .breach-layout .breach-matrix-wrap { order: 1; }
+  .breach-layout .breach-hint { order: 2; }
+  .breach-layout .breach-buffer { order: 3; }
+  .breach-layout .breach-panel { order: 4; }
+  .breach-layout .breach-legend { order: 5; }
+
+  .breach-panel {
+    padding: 0.6rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .breach-panel-title {
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .breach-flow {
+    padding: 0.45rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .breach-flow-viewport {
+    min-height: 2rem;
+    padding-left: 38px;
+  }
+
+  .breach-flow-scanner {
+    width: 38px;
+  }
+
+  .breach-flow-cover {
+    left: 38px;
+  }
+
+  .breach-flow-scanner-label {
+    font-size: 0.45rem;
+  }
+
+  .breach-flow-node {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.72rem;
+  }
+
+  .breach-flow-connector {
+    width: 18px;
+    margin: 0 1px;
+  }
+
+  .breach-flow-segments {
+    gap: 2px;
+    margin-bottom: 0.35rem;
+  }
+
+  .breach-flow-segment {
+    height: 3px;
+  }
+
+  .breach-flow-done {
+    font-size: 0.68rem;
+  }
+
+  .breach-flow-progress-bar span {
+    font-size: 0.65rem;
+    top: -16px;
+  }
+
+  .breach-buffer--enhanced {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .breach-buffer-label {
+    font-size: 0.65rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .breach-code {
+    padding: 0.25rem 0.35rem;
+    min-width: 34px;
+    font-size: 0.75rem;
+  }
+
+  .breach-code-index {
+    font-size: 0.5rem;
+  }
+
+  .breach-buffer-arrow {
+    font-size: 0.7rem;
+    margin: 0 0.05rem;
+  }
+
+  .breach-hint {
+    font-size: 0.78rem;
+    padding: 0.35rem 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .breach-matrix--enhanced {
+    gap: 2px;
+    padding: 2px;
+  }
+
+  .breach-cell {
+    padding: 0.35rem 0.1rem;
+    font-size: clamp(0.65rem, 2.5vw, 0.85rem);
+    border-width: 1px;
+  }
+
+  .breach-path-step {
+    font-size: 0.5rem;
+    top: 1px;
+    left: 2px;
+  }
+
+  .breach-legend {
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    font-size: 0.65rem;
+  }
+
+  .breach-legend-dot {
+    width: 8px;
+    height: 8px;
+  }
 }
 
 @media (min-width: 768px) {
