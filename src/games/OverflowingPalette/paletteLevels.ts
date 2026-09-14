@@ -1,0 +1,58 @@
+import type { PaletteLevel } from './types';
+
+export const PALETTE_LEVELS: Record<string, PaletteLevel> = {
+  easy: {
+    id: 'palette-easy',
+    difficulty: 'easy',
+    boardSize: 5,
+    maxMoves: 8,
+    optimalMoves: 5,
+    targetColor: 'blue',
+    colors: ['red', 'green', 'blue'],
+    board: [
+      ['red', 'red', 'green', 'green', 'blue'],
+      ['red', 'green', 'green', 'blue', 'blue'],
+      ['green', 'green', 'blue', 'blue', 'blue'],
+      ['green', 'blue', 'blue', 'red', 'red'],
+      ['blue', 'blue', 'red', 'red', 'red'],
+    ],
+  },
+  normal: {
+    id: 'palette-normal',
+    difficulty: 'normal',
+    boardSize: 7,
+    maxMoves: 7,
+    optimalMoves: 5,
+    targetColor: 'purple',
+    colors: ['red', 'blue', 'green', 'purple'],
+    board: [
+      ['red', 'red', 'blue', 'blue', 'green', 'green', 'purple'],
+      ['red', 'green', 'blue', 'green', 'green', 'purple', 'purple'],
+      ['green', 'green', 'blue', 'blue', 'green', 'purple', 'red'],
+      ['green', 'blue', 'blue', 'red', 'red', 'red', 'red'],
+      ['blue', 'blue', 'red', 'red', 'green', 'green', 'green'],
+      ['blue', 'red', 'red', 'green', 'green', 'blue', 'blue'],
+      ['red', 'red', 'green', 'green', 'blue', 'blue', 'purple'],
+    ],
+  },
+  hard: {
+    id: 'palette-hard',
+    difficulty: 'hard',
+    boardSize: 9,
+    maxMoves: 8,
+    optimalMoves: 6,
+    targetColor: 'yellow',
+    colors: ['red', 'blue', 'green', 'yellow', 'purple'],
+    board: [
+      ['red', 'red', 'blue', 'blue', 'green', 'green', 'yellow', 'yellow', 'purple'],
+      ['red', 'green', 'blue', 'green', 'green', 'yellow', 'yellow', 'purple', 'purple'],
+      ['green', 'green', 'blue', 'blue', 'green', 'yellow', 'purple', 'red', 'red'],
+      ['green', 'blue', 'blue', 'red', 'red', 'yellow', 'purple', 'red', 'blue'],
+      ['blue', 'blue', 'red', 'red', 'green', 'green', 'red', 'blue', 'blue'],
+      ['blue', 'red', 'red', 'green', 'green', 'blue', 'blue', 'green', 'green'],
+      ['red', 'red', 'green', 'green', 'blue', 'blue', 'green', 'green', 'yellow'],
+      ['red', 'green', 'green', 'blue', 'blue', 'green', 'yellow', 'yellow', 'yellow'],
+      ['green', 'green', 'blue', 'blue', 'green', 'yellow', 'yellow', 'purple', 'purple'],
+    ],
+  },
+};
