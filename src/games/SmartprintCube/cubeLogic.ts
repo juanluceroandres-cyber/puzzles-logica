@@ -1,14 +1,21 @@
-import type { BlockState, BlockType, CubeGameState, CubeLevel, Orientation, TileType } from './types';
+import type {
+  BlockState,
+  BlockType,
+  CubeDirection,
+  CubeGameState,
+  CubeLevel,
+  Orientation,
+  TileType,
+} from './types';
 
-type Dir = 'up' | 'down' | 'left' | 'right';
-
-const DIR_DELTA: Record<Dir, [number, number]> = {
+const DIR_DELTA: Record<CubeDirection, [number, number]> = {
   up: [-1, 0],
   down: [1, 0],
   left: [0, -1],
   right: [0, 1],
 };
 
+/** Celdas ocupadas según orientación (ancla = esquina superior-izquierda del bounding box). */
 export function getOccupiedCells(
   block: BlockState,
   blockType: BlockType,
@@ -16,70 +23,124 @@ export function getOccupiedCells(
   if (blockType === 'square') {
     return [[block.row, block.col]];
   }
-  if (block.orientation === 'vertical') {
-    return [
-      [block.row, block.col],
-      [block.row + 1, block.col],
-    ];
+
+  switch (block.orientation) {
+    case 'standing':
+      return [[block.row, block.col]];
+    case 'horizontal':
+      return [
+        [block.row, block.col],
+        [block.row, block.col + 1],
+      ];
+    case 'vertical':
+      return [
+        [block.row, block.col],
+        [block.row + 1, block.col],
+      ];
   }
-  return [
-    [block.row, block.col],
-    [block.row, block.col + 1],
-  ];
 }
 
-/** WW-style: el bloque se desliza en la dirección pulsada manteniendo orientación. */
-function slideRectangle(block: BlockState, dir: Dir): BlockState {
-  const [dr, dc] = DIR_DELTA[dir];
-  return {
-    row: block.row + dr,
-    col: block.col + dc,
-    orientation: block.orientation,
-  };
-}
-
-function moveSquare(block: BlockState, dir: Dir): BlockState {
-  const [dr, dc] = DIR_DELTA[dir];
-  return { ...block, row: block.row + dr, col: block.col + dc };
-}
-
-function blockFits(
-  level: CubeLevel,
+/**
+ * Máquina de estados WW Smartprint Cube — no modifica el estado original.
+ * Tabla: STANDING→H/V al tumbar; HORIZONTAL↔STANDING en ←/→, rueda en ↑/↓;
+ *        VERTICAL↔STANDING en ↑/↓, rueda en ←/→.
+ */
+export function getNextCubeState(
   block: BlockState,
+  blockType: BlockType,
+  direction: CubeDirection,
+): BlockState {
+  if (blockType === 'square') {
+    const [dr, dc] = DIR_DELTA[direction];
+    return {
+      row: block.row + dr,
+      col: block.col + dc,
+      orientation: 'standing',
+    };
+  }
+
+  const { row, col, orientation } = block;
+
+  if (orientation === 'standing') {
+    // Rodamiento: la celda original (row,col) queda libre; el bloque rueda hacia la dirección.
+    switch (direction) {
+      case 'left':
+        return { row, col: col - 2, orientation: 'horizontal' };
+      case 'right':
+        return { row, col: col + 1, orientation: 'horizontal' };
+      case 'up':
+        return { row: row - 2, col, orientation: 'vertical' };
+      case 'down':
+        return { row: row + 1, col, orientation: 'vertical' };
+    }
+  }
+
+  if (orientation === 'horizontal') {
+    switch (direction) {
+      case 'left':
+        return { row, col: col - 1, orientation: 'standing' };
+      case 'right':
+        return { row, col: col + 2, orientation: 'standing' };
+      case 'up':
+        return { row: row - 1, col, orientation: 'horizontal' };
+      case 'down':
+        return { row: row + 1, col, orientation: 'horizontal' };
+    }
+  }
+
+  // vertical
+  switch (direction) {
+    case 'up':
+      return { row: row - 1, col, orientation: 'standing' };
+    case 'down':
+      return { row: row + 2, col, orientation: 'standing' };
+    case 'left':
+      return { row, col: col - 1, orientation: 'vertical' };
+    case 'right':
+      return { row, col: col + 1, orientation: 'vertical' };
+  }
+}
+
+export function isValidCubeState(
+  block: BlockState,
+  level: CubeLevel,
   brokenTiles: Set<string>,
-): boolean {
+): { valid: boolean; fell: boolean; laser: boolean } {
   const cells = getOccupiedCells(block, level.blockType);
+
   for (const [r, c] of cells) {
-    if (r < 0 || r >= level.size || c < 0 || c >= level.size) return false;
+    if (r < 0 || r >= level.size || c < 0 || c >= level.size) {
+      return { valid: false, fell: false, laser: false };
+    }
     const tile = level.grid[r][c];
     const key = `${r},${c}`;
-    if (tile === 'wall') return false;
-    if (tile === 'breakable' && brokenTiles.has(key)) return false;
-  }
-  return true;
-}
-
-export function tryMove(
-  level: CubeLevel,
-  state: CubeGameState,
-  dir: Dir,
-): { ok: boolean; state: CubeGameState; fell: boolean; laser: boolean } {
-  const newBlock =
-    level.blockType === 'square'
-      ? moveSquare(state.block, dir)
-      : slideRectangle(state.block, dir);
-
-  if (!blockFits(level, newBlock, state.brokenTiles)) {
-    return { ok: false, state, fell: false, laser: false };
+    if (tile === 'wall') return { valid: false, fell: false, laser: false };
+    if (tile === 'breakable' && brokenTiles.has(key)) {
+      return { valid: false, fell: false, laser: false };
+    }
   }
 
-  const cells = getOccupiedCells(newBlock, level.blockType);
   let fell = false;
   let laser = false;
   for (const [r, c] of cells) {
     const tile = level.grid[r][c];
     if (tile === 'hole') fell = true;
     if (tile === 'laser') laser = true;
+  }
+
+  return { valid: true, fell, laser };
+}
+
+export function moveCube(
+  level: CubeLevel,
+  state: CubeGameState,
+  direction: CubeDirection,
+): { ok: boolean; state: CubeGameState; fell: boolean; laser: boolean } {
+  const candidate = getNextCubeState(state.block, level.blockType, direction);
+  const check = isValidCubeState(candidate, level, state.brokenTiles);
+
+  if (!check.valid) {
+    return { ok: false, state, fell: false, laser: false };
   }
 
   const brokenTiles = new Set(state.brokenTiles);
@@ -89,7 +150,7 @@ export function tryMove(
     }
   }
 
-  if (fell || laser) {
+  if (check.fell || check.laser) {
     return {
       ok: true,
       state: {
@@ -101,15 +162,15 @@ export function tryMove(
         brokenTiles: state.brokenTiles,
         moves: state.moves + 1,
       },
-      fell,
-      laser,
+      fell: check.fell,
+      laser: check.laser,
     };
   }
 
   return {
     ok: true,
     state: {
-      block: newBlock,
+      block: candidate,
       brokenTiles,
       moves: state.moves + 1,
     },
@@ -118,30 +179,8 @@ export function tryMove(
   };
 }
 
-/** Rotar el bloque rectangular en su sitio (como alinear con la meta en WW). */
-export function tryRotate(
-  level: CubeLevel,
-  state: CubeGameState,
-): { ok: boolean; state: CubeGameState } {
-  if (level.blockType !== 'rectangle') return { ok: false, state };
-
-  const newOrientation: Orientation =
-    state.block.orientation === 'vertical' ? 'horizontal' : 'vertical';
-  const newBlock: BlockState = { ...state.block, orientation: newOrientation };
-
-  if (!blockFits(level, newBlock, state.brokenTiles)) {
-    return { ok: false, state };
-  }
-
-  return {
-    ok: true,
-    state: {
-      ...state,
-      block: newBlock,
-      moves: state.moves + 1,
-    },
-  };
-}
+/** @deprecated alias */
+export const tryMove = moveCube;
 
 export function initCubeState(level: CubeLevel): CubeGameState {
   return {
@@ -155,36 +194,42 @@ export function initCubeState(level: CubeLevel): CubeGameState {
   };
 }
 
+function cellsMatch(a: [number, number][], b: [number, number][]): boolean {
+  if (a.length !== b.length) return false;
+  const setB = new Set(b.map(([r, c]) => `${r},${c}`));
+  return a.every(([r, c]) => setB.has(`${r},${c}`));
+}
+
 export function checkVictory(level: CubeLevel, state: CubeGameState): boolean {
   const cells = getOccupiedCells(state.block, level.blockType);
-  const goalCells: [number, number][] =
-    level.goal.orientation === 'horizontal'
-      ? [
-          [level.goal.row, level.goal.col],
-          [level.goal.row, level.goal.col + 1],
-        ]
-      : level.goal.orientation === 'vertical'
-        ? [
-            [level.goal.row, level.goal.col],
-            [level.goal.row + 1, level.goal.col],
-          ]
-        : [[level.goal.row, level.goal.col]];
 
-  const onGoal = cells.every(([r, c]) =>
-    goalCells.some(([gr, gc]) => gr === r && gc === c),
-  );
-  if (!onGoal) return false;
+  let goalCells: [number, number][];
+  switch (level.goal.orientation) {
+    case 'horizontal':
+      goalCells = [
+        [level.goal.row, level.goal.col],
+        [level.goal.row, level.goal.col + 1],
+      ];
+      break;
+    case 'vertical':
+      goalCells = [
+        [level.goal.row, level.goal.col],
+        [level.goal.row + 1, level.goal.col],
+      ];
+      break;
+    case 'standing':
+    default:
+      goalCells = [[level.goal.row, level.goal.col]];
+      break;
+  }
+
+  if (!cellsMatch(cells, goalCells)) return false;
 
   if (level.blockType === 'square') {
     return level.goal.orientation === 'standing';
   }
-  if (level.goal.orientation === 'horizontal') {
-    return state.block.orientation === 'horizontal';
-  }
-  if (level.goal.orientation === 'vertical' || level.goal.orientation === 'standing') {
-    return state.block.orientation === 'vertical';
-  }
-  return false;
+
+  return state.block.orientation === level.goal.orientation;
 }
 
 export function getTileDisplay(
@@ -201,4 +246,15 @@ export function getTileDisplay(
     return 'empty';
   }
   return tile;
+}
+
+export function orientationLabel(o: Orientation): string {
+  switch (o) {
+    case 'standing':
+      return 'De pie ■';
+    case 'horizontal':
+      return 'Acostado ▬';
+    case 'vertical':
+      return 'Acostado ▮';
+  }
 }

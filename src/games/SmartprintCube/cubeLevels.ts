@@ -12,7 +12,7 @@ export const CUBE_LEVELS: Record<string, CubeLevel> = {
     blockType: 'square',
     startRow: 0,
     startCol: 0,
-    startOrientation: 'vertical',
+    startOrientation: 'standing',
     goal: { row: 4, col: 4, orientation: 'standing' },
     grid: (() => {
       const g = grid(5);
@@ -27,7 +27,7 @@ export const CUBE_LEVELS: Record<string, CubeLevel> = {
     blockType: 'rectangle',
     startRow: 0,
     startCol: 0,
-    startOrientation: 'vertical',
+    startOrientation: 'standing',
     maxMoves: 25,
     goal: { row: 6, col: 5, orientation: 'horizontal' },
     grid: (() => {
@@ -49,7 +49,7 @@ export const CUBE_LEVELS: Record<string, CubeLevel> = {
     blockType: 'rectangle',
     startRow: 0,
     startCol: 0,
-    startOrientation: 'vertical',
+    startOrientation: 'standing',
     maxMoves: 35,
     goal: { row: 8, col: 7, orientation: 'horizontal' },
     grid: (() => {

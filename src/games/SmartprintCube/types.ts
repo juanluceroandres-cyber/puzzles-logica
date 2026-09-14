@@ -2,12 +2,16 @@ import type { Difficulty } from '../../types/common';
 
 export type TileType = 'empty' | 'wall' | 'hole' | 'goal' | 'breakable' | 'laser';
 export type BlockType = 'square' | 'rectangle';
-export type Orientation = 'vertical' | 'horizontal';
+
+/** standing = de pie (1 celda); horizontal / vertical = acostado (2 celdas). */
+export type Orientation = 'standing' | 'horizontal' | 'vertical';
+
+export type CubeDirection = 'up' | 'down' | 'left' | 'right';
 
 export interface GoalSpec {
   row: number;
   col: number;
-  orientation: Orientation | 'standing';
+  orientation: Orientation;
 }
 
 export interface CubeLevel {

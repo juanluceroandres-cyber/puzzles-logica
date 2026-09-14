@@ -9,19 +9,17 @@ import {
   getOccupiedCells,
   getTileDisplay,
   initCubeState,
-  tryMove,
-  tryRotate,
+  moveCube,
+  orientationLabel,
 } from './cubeLogic';
 import { CUBE_LEVELS } from './cubeLevels';
-import type { CubeGameState } from './types';
+import type { BlockState, CubeDirection, CubeGameState, Orientation } from './types';
 
 interface Props {
   difficulty: Difficulty;
   onFinish: (won: boolean, result: GameResultData) => void;
   onMenu: () => void;
 }
-
-type Dir = 'up' | 'down' | 'left' | 'right';
 
 const TILE_CLASS: Record<string, string> = {
   empty: 'cube-cell--empty',
@@ -32,24 +30,19 @@ const TILE_CLASS: Record<string, string> = {
   laser: 'cube-cell--laser',
 };
 
-const DIR_LABEL: Record<Dir, string> = {
-  up: '↑ arriba',
-  down: '↓ abajo',
-  left: '← izquierda',
-  right: '→ derecha',
-};
-
 export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
   const level = CUBE_LEVELS[difficulty];
   const [showTutorial, setShowTutorial] = useState(true);
   const [state, setState] = useState<CubeGameState>(() => initCubeState(level));
   const [restarts, setRestarts] = useState(0);
-  const [lastDir, setLastDir] = useState<Dir | null>(null);
+  const [anim, setAnim] = useState<{ dir: CubeDirection; from: BlockState; to: BlockState } | null>(
+    null,
+  );
   const [feedback, setFeedback] = useState('');
-  const [isAnimating, setIsAnimating] = useState(false);
   const startTime = useRef(Date.now());
   const [elapsed, setElapsed] = useState(0);
   const finished = useRef(false);
+  const isAnimating = useRef(false);
 
   useEffect(() => {
     if (showTutorial || finished.current) return;
@@ -60,8 +53,9 @@ export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
   const handleRestart = useCallback(() => {
     setState(initCubeState(level));
     setRestarts((r) => r + 1);
-    setLastDir(null);
+    setAnim(null);
     setFeedback('');
+    isAnimating.current = false;
     startTime.current = Date.now();
     setElapsed(0);
     finished.current = false;
@@ -86,76 +80,54 @@ export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
     [difficulty, level.maxMoves, onFinish, restarts],
   );
 
-  const afterMove = useCallback(
-    (newState: CubeGameState, fell: boolean, laser: boolean) => {
-      setState(newState);
-      setTimeout(() => {
-        setIsAnimating(false);
-        setLastDir(null);
-        if (fell || laser) setFeedback('');
-        if (checkVictory(level, newState)) {
-          finish(true, newState.moves);
-        } else if (level.maxMoves && newState.moves >= level.maxMoves) {
-          finish(false, newState.moves);
-        }
-      }, 280);
-    },
-    [level, finish],
-  );
-
   const move = useCallback(
-    (dir: Dir) => {
-      if (finished.current || isAnimating) return;
-      const result = tryMove(level, state, dir);
+    (dir: CubeDirection) => {
+      if (finished.current || isAnimating.current) return;
+
+      const fromBlock = state.block;
+      const result = moveCube(level, state, dir);
+
       if (!result.ok) {
-        setFeedback('No hay espacio en esa dirección');
-        setTimeout(() => setFeedback(''), 800);
+        setFeedback('Movimiento inválido — no hay espacio');
+        setTimeout(() => setFeedback(''), 700);
         return;
       }
 
-      setIsAnimating(true);
-      setLastDir(dir);
+      isAnimating.current = true;
+      setAnim({ dir, from: fromBlock, to: result.state.block });
 
       if (result.fell) {
-        setFeedback('¡Caíste en un hueco! Reiniciando posición…');
+        setFeedback('¡Caíste en un hueco! Reiniciando…');
         setRestarts((r) => r + 1);
       } else if (result.laser) {
-        setFeedback('¡Láser! Reiniciando posición…');
+        setFeedback('¡Láser! Reiniciando…');
         setRestarts((r) => r + 1);
       } else {
-        setFeedback(`Desplazamiento ${DIR_LABEL[dir]}`);
+        setFeedback(
+          `${orientationLabel(fromBlock.orientation)} → ${orientationLabel(result.state.block.orientation)}`,
+        );
       }
 
-      afterMove(result.state, result.fell, result.laser);
-    },
-    [level, state, isAnimating, afterMove],
-  );
+      setTimeout(() => {
+        setState(result.state);
+        setAnim(null);
+        isAnimating.current = false;
+        if (result.fell || result.laser) setFeedback('');
 
-  const rotate = useCallback(() => {
-    if (finished.current || isAnimating || level.blockType !== 'rectangle') return;
-    const result = tryRotate(level, state);
-    if (!result.ok) {
-      setFeedback('No hay espacio para rotar aquí');
-      setTimeout(() => setFeedback(''), 800);
-      return;
-    }
-    setFeedback(
-      `Rotado — ahora ${result.state.block.orientation === 'vertical' ? 'vertical ▮' : 'horizontal ▬'}`,
-    );
-    setState(result.state);
-    if (checkVictory(level, result.state)) {
-      finish(true, result.state.moves);
-    }
-  }, [level, state, isAnimating, finish]);
+        if (checkVictory(level, result.state)) {
+          finish(true, result.state.moves);
+        } else if (level.maxMoves && result.state.moves >= level.maxMoves) {
+          finish(false, result.state.moves);
+        }
+      }, 300);
+    },
+    [level, state, finish],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'r' || e.key === 'R') {
-        e.preventDefault();
-        rotate();
-        return;
-      }
-      const map: Record<string, Dir> = {
+      if (e.repeat) return;
+      const map: Record<string, CubeDirection> = {
         ArrowUp: 'up',
         ArrowDown: 'down',
         ArrowLeft: 'left',
@@ -176,11 +148,11 @@ export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [move, rotate]);
+  }, [move]);
 
+  const displayBlock = anim ? anim.to : state.block;
   const progress = checkVictory(level, state) ? 1 : Math.min(0.9, state.moves / (level.maxMoves ?? 30));
-
-  const blockStyle = getBlockStyle(state.block, level.blockType, level.size);
+  const tumbleClass = anim ? getTumbleClass(anim.from.orientation, anim.to.orientation, anim.dir) : '';
 
   return (
     <div className="game-screen cube-screen">
@@ -188,13 +160,11 @@ export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
         <Tutorial
           title="Smartprint Cube"
           steps={[
-            'Usa flechas o WASD para deslizar el bloque en esa dirección.',
-            'El bloque se mueve exactamente hacia donde pulsas, sin saltos raros.',
-            level.blockType === 'rectangle'
-              ? 'Presiona R o el botón ↻ para rotar el bloque (vertical ↔ horizontal).'
-              : 'El bloque cuadrado mantiene siempre su forma.',
-            'Evita huecos y láseres — te devuelven al inicio.',
-            `Meta: zona verde con orientación ${level.goal.orientation === 'horizontal' ? 'horizontal ▬' : 'vertical ▮'}.`,
+            'El bloque rectangular tiene 3 estados: de pie ■, acostado ▬ (horizontal) o ▮ (vertical).',
+            'De pie + ←/→ = se tumba horizontal. De pie + ↑/↓ = se tumba vertical.',
+            'Acostado + dirección de su eje = rueda. Acostado + eje perpendicular = se levanta de pie.',
+            'Usa solo las flechas o WASD — cada pulsación es un movimiento.',
+            `Meta: orientación ${orientationLabel(level.goal.orientation)} en la zona verde.`,
           ]}
           onStart={() => {
             setShowTutorial(false);
@@ -214,11 +184,7 @@ export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
 
       {level.blockType === 'rectangle' && (
         <div className="cube-orientation-badge">
-          Orientación:{' '}
-          <strong>{state.block.orientation === 'vertical' ? 'Vertical ▮' : 'Horizontal ▬'}</strong>
-          <button type="button" className="cube-rotate-btn" onClick={rotate} disabled={isAnimating}>
-            ↻ Rotar (R)
-          </button>
+          Estado: <strong>{orientationLabel(displayBlock.orientation)}</strong>
         </div>
       )}
 
@@ -236,7 +202,7 @@ export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
           {Array.from({ length: level.size }, (_, r) =>
             Array.from({ length: level.size }, (_, c) => {
               const display = getTileDisplay(level, state, r, c);
-              const isBlockCell = getOccupiedCells(state.block, level.blockType).some(
+              const isBlockCell = getOccupiedCells(displayBlock, level.blockType).some(
                 ([br, bc]) => br === r && bc === c,
               );
               return (
@@ -250,31 +216,29 @@ export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
         </div>
 
         <div
-          className={`cube-block cube-block--slide ${isAnimating ? 'cube-block--animating' : ''} ${lastDir ? `cube-block--dir-${lastDir}` : ''} cube-block--${state.block.orientation}`}
-          style={blockStyle}
+          className={`cube-block cube-block--${displayBlock.orientation} ${tumbleClass}`}
+          style={getBlockStyle(displayBlock, level.blockType, level.size)}
         >
           <div className="cube-block-inner">
             {level.blockType === 'rectangle' && (
-              <span className="cube-block-orient">
-                {state.block.orientation === 'vertical' ? '▮' : '▬'}
-              </span>
+              <span className="cube-block-glyph">{getGlyph(displayBlock.orientation)}</span>
             )}
           </div>
         </div>
       </div>
 
       <div className="cube-controls">
-        <button type="button" className="cube-btn" onClick={() => move('up')} disabled={isAnimating}>
+        <button type="button" className="cube-btn" onClick={() => move('up')} disabled={isAnimating.current}>
           ↑
         </button>
         <div className="cube-controls-row">
-          <button type="button" className="cube-btn" onClick={() => move('left')} disabled={isAnimating}>
+          <button type="button" className="cube-btn" onClick={() => move('left')} disabled={isAnimating.current}>
             ←
           </button>
-          <button type="button" className="cube-btn" onClick={() => move('down')} disabled={isAnimating}>
+          <button type="button" className="cube-btn" onClick={() => move('down')} disabled={isAnimating.current}>
             ↓
           </button>
-          <button type="button" className="cube-btn" onClick={() => move('right')} disabled={isAnimating}>
+          <button type="button" className="cube-btn" onClick={() => move('right')} disabled={isAnimating.current}>
             →
           </button>
         </div>
@@ -283,21 +247,46 @@ export function SmartprintCube({ difficulty, onFinish, onMenu }: Props) {
   );
 }
 
+function getGlyph(o: Orientation): string {
+  switch (o) {
+    case 'standing':
+      return '■';
+    case 'horizontal':
+      return '▬';
+    case 'vertical':
+      return '▮';
+  }
+}
+
 function getBlockStyle(
-  block: { row: number; col: number; orientation: string },
+  block: BlockState,
   blockType: 'square' | 'rectangle',
   gridSize: number,
 ): React.CSSProperties {
   let cols = 1;
   let rows = 1;
   if (blockType === 'rectangle') {
-    if (block.orientation === 'vertical') rows = 2;
-    else cols = 2;
+    if (block.orientation === 'horizontal') cols = 2;
+    else if (block.orientation === 'vertical') rows = 2;
   }
   return {
     top: `calc(${block.row} * (100% / ${gridSize}))`,
     left: `calc(${block.col} * (100% / ${gridSize}))`,
     width: `calc(${cols} * (100% / ${gridSize}))`,
     height: `calc(${rows} * (100% / ${gridSize}))`,
+    transition: 'top 0.28s ease, left 0.28s ease, width 0.28s ease, height 0.28s ease',
   };
+}
+
+function getTumbleClass(
+  from: Orientation,
+  to: Orientation,
+  dir: CubeDirection,
+): string {
+  if (from === to) return `cube-tumble--roll-${dir}`;
+  if (from === 'standing' && to === 'horizontal') return `cube-tumble--fall-h-${dir}`;
+  if (from === 'standing' && to === 'vertical') return `cube-tumble--fall-v-${dir}`;
+  if (from === 'horizontal' && to === 'standing') return `cube-tumble--rise-h-${dir}`;
+  if (from === 'vertical' && to === 'standing') return `cube-tumble--rise-v-${dir}`;
+  return '';
 }

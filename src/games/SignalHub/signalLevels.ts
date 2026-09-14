@@ -46,13 +46,13 @@ export const SIGNAL_LEVELS: Record<string, SignalLevel> = {
       { row: 6, col: 0, color: 'green' },
       { row: 6, col: 6, color: 'green' },
       { row: 1, col: 3, color: 'yellow' },
-      { row: 4, col: 3, color: 'yellow' },
+      { row: 5, col: 3, color: 'yellow' },
       { row: 2, col: 1, color: 'purple' },
       { row: 5, col: 5, color: 'purple' },
     ],
     obstacles: [
       [2, 3],
-      [4, 3],
+      [3, 3],
     ],
   },
 };

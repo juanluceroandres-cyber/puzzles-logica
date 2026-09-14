@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BreachPathOverlay } from '../../components/BreachPathOverlay';
+import { BreachSequenceFlow } from '../../components/BreachSequenceFlow';
 import { GameHeader } from '../../components/GameHeader';
 import { Tutorial } from '../../components/Tutorial';
 import type { Difficulty, GameResultData } from '../../types/common';
@@ -98,7 +100,7 @@ export function BreachProtocol({ difficulty, onFinish, onMenu }: Props) {
   const handleSelect = (row: number, col: number) => {
     if (finished.current) return;
     setLastPick(`${row},${col}`);
-    setTimeout(() => setLastPick(null), 400);
+    setTimeout(() => setLastPick(null), 500);
     setState((s) => selectCell(s, row, col, level));
   };
 
@@ -108,11 +110,11 @@ export function BreachProtocol({ difficulty, onFinish, onMenu }: Props) {
         <Tutorial
           title="Breach Protocol"
           steps={[
-            'Busca un camino en la matriz alternando fila → columna → fila…',
-            'Cada código elegido entra al buffer (espacio limitado).',
-            'Las secuencias objetivo pueden empezar en cualquier posición del buffer.',
-            'Varias secuencias pueden completarse con la misma cadena (se solapan).',
-            'Tras cada elección, revisa qué secuencias avanzaron o se completaron.',
+            'Alterna fila → columna → fila al elegir códigos en la matriz.',
+            'Cada elección llena el buffer de abajo.',
+            'Las secuencias pueden empezar en cualquier posición del buffer.',
+            'Una misma cadena puede completar varias secuencias a la vez.',
+            'Observa cómo se iluminan y conectan los códigos objetivo.',
           ]}
           onStart={() => {
             setShowTutorial(false);
@@ -129,112 +131,102 @@ export function BreachProtocol({ difficulty, onFinish, onMenu }: Props) {
         onMenu={onMenu}
       />
 
-      <div className="breach-panel">
-        <div className="breach-sequences">
-          <h4>Secuencias objetivo</h4>
-          {level.sequences.map((seq) => {
-            const status = state.sequenceStatuses.find((s) => s.id === seq.id)!;
-            return (
-              <div
-                key={seq.id}
-                className={`breach-seq ${status.completed ? 'breach-seq--done' : ''}`}
-              >
-                <div className="breach-seq-codes">
-                  {seq.codes.map((code, i) => (
-                    <span
-                      key={i}
-                      className={`breach-seq-code ${i < status.progress ? 'breach-seq-code--matched' : ''}`}
-                      style={{ color: getCodeColor(code) }}
-                    >
-                      {code}
-                      {i < seq.codes.length - 1 && <span className="breach-arrow"> → </span>}
-                    </span>
-                  ))}
-                </div>
-                <div className="breach-seq-status">
-                  {status.completed ? (
-                    <span className="breach-done-badge">
-                      ✓ Completada{status.matchedAt !== null ? ` (desde buffer[${status.matchedAt}])` : ''}
-                    </span>
-                  ) : (
-                    <span className="breach-progress-badge">
-                      {status.progress}/{status.total} códigos
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <div className="breach-panel breach-panel--animated">
+        <h4 className="breach-panel-title">Secuencias objetivo</h4>
+        {level.sequences.map((seq, idx) => {
+          const status = state.sequenceStatuses.find((s) => s.id === seq.id)!;
+          return (
+            <BreachSequenceFlow
+              key={seq.id}
+              codes={seq.codes}
+              status={status}
+              seqIndex={idx}
+            />
+          );
+        })}
       </div>
 
       <div className="breach-buffer breach-buffer--enhanced">
-        <span className="breach-buffer-label">BUFFER — cadena de códigos</span>
-        <div className="breach-buffer-codes">
+        <span className="breach-buffer-label">BUFFER</span>
+        <div className="breach-buffer-flow">
           {Array.from({ length: level.bufferSize }, (_, i) => (
-            <span
-              key={i}
-              className={`breach-code ${state.buffer[i] ? 'breach-code--filled' : ''} ${lastPick && i === state.buffer.length - 1 ? 'breach-code--pop' : ''}`}
-              style={
-                state.buffer[i]
-                  ? { color: getCodeColor(state.buffer[i]), borderColor: getCodeColor(state.buffer[i]) }
-                  : undefined
-              }
-            >
-              <span className="breach-code-index">{i}</span>
-              {state.buffer[i] ?? '—'}
-            </span>
+            <div key={i} className="breach-buffer-slot-wrap">
+              {i > 0 && (
+                <span className={`breach-buffer-arrow ${state.buffer[i] ? 'breach-buffer-arrow--active' : ''}`}>
+                  →
+                </span>
+              )}
+              <span
+                className={[
+                  'breach-code',
+                  state.buffer[i] ? 'breach-code--filled' : '',
+                  lastPick && i === state.buffer.length - 1 ? 'breach-code--pop' : '',
+                  state.buffer[i] && suggestedCodes.has(state.buffer[i]) ? 'breach-code--useful' : '',
+                ].filter(Boolean).join(' ')}
+                style={
+                  state.buffer[i]
+                    ? { color: getCodeColor(state.buffer[i]), borderColor: getCodeColor(state.buffer[i]) }
+                    : undefined
+                }
+              >
+                <span className="breach-code-index">{i}</span>
+                {state.buffer[i] ?? '—'}
+              </span>
+            </div>
           ))}
         </div>
       </div>
 
       <p className="breach-hint breach-hint--animated">{getSelectionHint(state)}</p>
 
-      <div
-        className="breach-matrix breach-matrix--enhanced"
-        style={{ gridTemplateColumns: `repeat(${level.size}, 1fr)` }}
-      >
-        {level.matrix.map((row, r) =>
-          row.map((code, c) => {
-            const k = `${r},${c}`;
-            const canSelect = selectable.has(k);
-            const isCurrent = state.lastCell?.[0] === r && state.lastCell?.[1] === c;
-            const onPath = isOnSelectedPath(state, r, c);
-            const pathStep = getPathIndex(state, r, c);
-            const isActiveLine =
-              activeLine &&
-              ((activeLine.type === 'row' && activeLine.index === r) ||
-                (activeLine.type === 'col' && activeLine.index === c));
-            const codeColor = getCodeColor(code);
-            const isSuggested = suggestedCodes.has(code) && canSelect;
+      <div className="breach-matrix-wrap">
+        <BreachPathOverlay cells={state.selectedCells} gridSize={level.size} />
+        <div
+          className="breach-matrix breach-matrix--enhanced"
+          style={{ gridTemplateColumns: `repeat(${level.size}, 1fr)` }}
+        >
+          {level.matrix.map((row, r) =>
+            row.map((code, c) => {
+              const k = `${r},${c}`;
+              const canSelect = selectable.has(k);
+              const isCurrent = state.lastCell?.[0] === r && state.lastCell?.[1] === c;
+              const onPath = isOnSelectedPath(state, r, c);
+              const pathStep = getPathIndex(state, r, c);
+              const isActiveLine =
+                activeLine &&
+                ((activeLine.type === 'row' && activeLine.index === r) ||
+                  (activeLine.type === 'col' && activeLine.index === c));
+              const codeColor = getCodeColor(code);
+              const isSuggested = suggestedCodes.has(code) && canSelect;
 
-            return (
-              <button
-                key={k}
-                type="button"
-                className={[
-                  'breach-cell',
-                  canSelect ? 'breach-cell--selectable' : '',
-                  isCurrent ? 'breach-cell--selected' : '',
-                  onPath ? 'breach-cell--on-path' : '',
-                  isActiveLine ? 'breach-cell--active-line' : '',
-                  isSuggested ? 'breach-cell--matches-next' : '',
-                  lastPick === k ? 'breach-cell--just-picked' : '',
-                ].filter(Boolean).join(' ')}
-                onClick={() => handleSelect(r, c)}
-                disabled={!canSelect}
-              >
-                {onPath && <span className="breach-path-step">{pathStep + 1}</span>}
-                <span className="breach-cell-code" style={{ color: codeColor }}>{code}</span>
-              </button>
-            );
-          }),
-        )}
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  className={[
+                    'breach-cell',
+                    canSelect ? 'breach-cell--selectable' : '',
+                    isCurrent ? 'breach-cell--selected' : '',
+                    onPath ? 'breach-cell--on-path' : '',
+                    isActiveLine ? 'breach-cell--active-line' : '',
+                    isSuggested ? 'breach-cell--matches-next' : '',
+                    lastPick === k ? 'breach-cell--just-picked' : '',
+                  ].filter(Boolean).join(' ')}
+                  onClick={() => handleSelect(r, c)}
+                  disabled={!canSelect}
+                >
+                  {onPath && <span className="breach-path-step">{pathStep + 1}</span>}
+                  <span className="breach-cell-code" style={{ color: codeColor }}>{code}</span>
+                </button>
+              );
+            }),
+          )}
+        </div>
       </div>
 
       <div className="breach-legend">
         <span><span className="breach-legend-dot breach-legend-dot--line" /> Fila/columna activa</span>
-        <span><span className="breach-legend-dot breach-legend-dot--path" /> Tu camino</span>
+        <span><span className="breach-legend-dot breach-legend-dot--path" /> Tu camino animado</span>
         <span><span className="breach-legend-dot breach-legend-dot--next" /> Código útil ahora</span>
       </div>
     </div>

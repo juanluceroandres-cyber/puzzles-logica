@@ -87,19 +87,68 @@ export function isValidPathExtension(
   return true;
 }
 
+/** Verifica que el camino incluya ambos nodos y los una de forma continua. */
+export function isPairConnected(
+  path: [number, number][],
+  a: Endpoint,
+  b: Endpoint,
+): boolean {
+  if (path.length < 2) return false;
+
+  const pathSet = new Set(path.map(([r, c]) => `${r},${c}`));
+  if (!pathSet.has(`${a.row},${a.col}`) || !pathSet.has(`${b.row},${b.col}`)) {
+    return false;
+  }
+
+  const queue: [number, number][] = [[a.row, a.col]];
+  const visited = new Set<string>();
+
+  while (queue.length > 0) {
+    const [r, c] = queue.shift()!;
+    const key = `${r},${c}`;
+    if (visited.has(key)) continue;
+    visited.add(key);
+
+    if (r === b.row && c === b.col) return true;
+
+    for (const [dr, dc] of [
+      [0, 1],
+      [0, -1],
+      [1, 0],
+      [-1, 0],
+    ]) {
+      const nr = r + dr;
+      const nc = c + dc;
+      if (pathSet.has(`${nr},${nc}`)) queue.push([nr, nc]);
+    }
+  }
+  return false;
+}
+
+export function isColorConnected(
+  level: SignalLevel,
+  paths: Map<SignalColor, [number, number][]>,
+  color: SignalColor,
+): boolean {
+  const pairs = getEndpointPairs(level);
+  const pair = pairs.get(color);
+  const path = paths.get(color);
+  if (!pair || !path) return false;
+  return isPairConnected(path, pair[0], pair[1]);
+}
+
 export function checkVictory(
   level: SignalLevel,
   paths: Map<SignalColor, [number, number][]>,
 ): boolean {
   const pairs = getEndpointPairs(level);
+  if (pairs.size === 0) return false;
+
   for (const [color, [a, b]] of pairs) {
     const path = paths.get(color);
-    if (!path || path.length < 2) return false;
-    const hasA = path.some(([r, c]) => r === a.row && c === a.col);
-    const hasB = path.some(([r, c]) => r === a.row && c === b.col);
-    if (!hasA || !hasB) return false;
+    if (!path || !isPairConnected(path, a, b)) return false;
   }
-  return pairs.size > 0 && paths.size === pairs.size;
+  return paths.size === pairs.size;
 }
 
 export function getConnectionProgress(
@@ -108,13 +157,11 @@ export function getConnectionProgress(
 ): number {
   const pairs = getEndpointPairs(level);
   if (pairs.size === 0) return 0;
+
   let connected = 0;
   for (const [color, [a, b]] of pairs) {
     const path = paths.get(color);
-    if (!path || path.length < 2) continue;
-    const hasA = path.some(([r, c]) => r === a.row && c === a.col);
-    const hasB = path.some(([r, c]) => r === a.row && c === b.col);
-    if (hasA && hasB) connected++;
+    if (path && isPairConnected(path, a, b)) connected++;
   }
   return connected / pairs.size;
 }

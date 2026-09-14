@@ -9,10 +9,14 @@ import {
   checkVictory,
   countMoves,
   getConnectionProgress,
+  getEndpointPairs,
+  isColorConnected,
+  isPairConnected,
   isValidPathExtension,
   pathsToGrid,
   SIGNAL_COLORS,
 } from './pathLogic';
+import { getNextHintColor, HARD_HINTS } from './signalHints';
 import { SIGNAL_LEVELS } from './signalLevels';
 import type { SignalColor } from './types';
 
@@ -31,6 +35,8 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
     path: [number, number][];
   } | null>(null);
   const [restarts, setRestarts] = useState(0);
+  const [hintText, setHintText] = useState<string | null>(null);
+  const [pathError, setPathError] = useState('');
   const startTime = useRef(Date.now());
   const [elapsed, setElapsed] = useState(0);
   const finished = useRef(false);
@@ -46,6 +52,8 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
   const handleRestart = useCallback(() => {
     setPaths(new Map());
     setDrawing(null);
+    setHintText(null);
+    setPathError('');
     setRestarts((r) => r + 1);
     startTime.current = Date.now();
     setElapsed(0);
@@ -99,6 +107,7 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
   const startDraw = (row: number, col: number) => {
     const cell = baseGrid[row][col];
     if (cell.type === 'obstacle') return;
+    setPathError('');
 
     if (cell.type === 'endpoint') {
       const color = cell.color;
@@ -119,20 +128,39 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
 
   const endDraw = () => {
     if (!drawing) return;
-    if (drawing.path.length >= 2) {
+    const pairs = getEndpointPairs(level);
+    const pair = pairs.get(drawing.color);
+
+    if (pair && isPairConnected(drawing.path, pair[0], pair[1])) {
       const newPaths = new Map(paths);
       newPaths.set(drawing.color, drawing.path);
       setPaths(newPaths);
+      setPathError('');
+    } else if (drawing.path.length >= 2) {
+      setPathError('El camino debe llegar al otro nodo del mismo color');
     }
     setDrawing(null);
+  };
+
+  const showHint = () => {
+    const connected = new Set<SignalColor>();
+    for (const color of getEndpointPairs(level).keys()) {
+      if (isColorConnected(level, paths, color)) connected.add(color);
+    }
+    const next = getNextHintColor(connected);
+    if (next && HARD_HINTS[next]) {
+      setHintText(HARD_HINTS[next]!);
+    } else {
+      setHintText('¡Ya conectaste todos los pares!');
+    }
   };
 
   const displayPaths = new Map(paths);
   if (drawing) displayPaths.set(drawing.color, drawing.path);
   const grid = pathsToGrid(baseGrid, displayPaths);
 
-  const progress = getConnectionProgress(level, displayPaths);
-  const allConnected = checkVictory(level, displayPaths);
+  const progress = getConnectionProgress(level, paths);
+  const allConnected = checkVictory(level, paths);
 
   return (
     <div className="game-screen">
@@ -141,9 +169,9 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
           title="Conectar colores"
           steps={[
             'Cada color tiene dos nodos que debes conectar.',
-            'Arrastra desde un nodo para dibujar un camino hasta su par.',
+            'Arrastra desde un nodo hasta el otro del mismo color.',
+            'El camino debe llegar completamente al segundo nodo para contar.',
             'Los caminos no pueden cruzarse ni compartir casillas.',
-            'Conecta todos los pares para ganar.',
           ]}
           onStart={() => {
             setShowTutorial(false);
@@ -160,15 +188,26 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
         onMenu={onMenu}
       />
 
+      {difficulty === 'hard' && (
+        <button type="button" className="btn-secondary signal-hint-btn" onClick={showHint}>
+          💡 Mostrar pista
+        </button>
+      )}
+
+      {hintText && (
+        <p className="game-hint game-hint--action">{hintText}</p>
+      )}
+
+      {pathError && (
+        <p className="game-hint game-hint--warn">{pathError}</p>
+      )}
+
       <div
         className="signal-grid"
         style={{ gridTemplateColumns: `repeat(${level.size}, 1fr)` }}
         onMouseLeave={endDraw}
         onMouseUp={endDraw}
         onTouchEnd={endDraw}
-        ref={(el) => {
-          if (!el) return;
-        }}
       >
         {grid.map((row, r) =>
           row.map((cell, c) => {
@@ -185,11 +224,17 @@ export function SignalHub({ difficulty, onFinish, onMenu }: Props) {
             }
 
             const isPath = cell.type === 'path';
+            const pair = drawing ? getEndpointPairs(level).get(drawing.color) : null;
+            const isTargetEndpoint =
+              pair &&
+              drawing &&
+              ((r === pair[1].row && c === pair[1].col) ||
+                (r === pair[0].row && c === pair[0].col));
 
             return (
               <div
                 key={`${r}-${c}`}
-                className={`signal-cell ${isPath ? 'signal-cell--path' : ''}`}
+                className={`signal-cell ${isPath ? 'signal-cell--path' : ''} ${isTargetEndpoint ? 'signal-cell--target-ep' : ''}`}
                 style={{ background: bg }}
                 onMouseDown={(e) => {
                   e.preventDefault();
